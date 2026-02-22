@@ -7,20 +7,56 @@ export default function OPDForm({ preSelectedDept, preSelectedDoctor }) {
   lastName: "",
   gender: "",
   age: "",
+  dateOfBirth: "",
   address: "",
+  photo: null,
 });
+const [generatedToken, setGeneratedToken] = useState(null);
+const [bookingTime, setBookingTime] = useState(null);
+const [errors, setErrors] = useState({});
+  
 const handleChange = (e) => {
   const { name, value } = e.target;
   setFormData((prev) => ({
     ...prev,
     [name]: value,
   }));
+  
+  // Clear specific error when user starts typing
+  if (errors[name] || errors.ageMatch) {
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[name];
+      if (name === 'age' || name === 'dateOfBirth') {
+        delete newErrors.ageMatch;
+      }
+      return newErrors;
+    });
+  }
 };
-
-
-const [generatedToken, setGeneratedToken] = useState(null);
-const [bookingTime, setBookingTime] = useState(null);
-
+  
+  // Validation function
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (formData.age && formData.dateOfBirth) {
+      const birthDate = new Date(formData.dateOfBirth);
+      const today = new Date();
+      let calculatedAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        calculatedAge--;
+      }
+      
+      if (parseInt(formData.age) !== calculatedAge) {
+        newErrors.ageMatch = "Age does not match the date of birth.";
+      }
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
   const [step, setStep] = useState(preSelectedDept && preSelectedDoctor ? "form" : (preSelectedDept ? "doctor" : "department"));
   const [selectedDept, setSelectedDept] = useState(preSelectedDept ? { name: preSelectedDept } : null);
   const [selectedDoctor, setSelectedDoctor] = useState(preSelectedDoctor ? { name: preSelectedDoctor } : null);
@@ -228,11 +264,11 @@ const [bookingTime, setBookingTime] = useState(null);
                   )}
 
                   <div className="p-6 text-center text-white bg-gradient-to-r from-cyan-500 to-blue-600">
-                    <div className="relative mx-auto mb-4 w-20 h-20">
+                    <div className="relative w-20 h-20 mx-auto mb-4">
                       <img
                         src={doctor.image}
                         alt={doctor.name}
-                        className="w-full h-full object-cover rounded-full border-4 border-white shadow-lg"
+                        className="object-cover w-full h-full border-4 border-white rounded-full shadow-lg"
                         onError={(e) => {
                           e.target.src = `https://via.placeholder.com/80?text=${doctor.name.split(" ")[1]}`;
                         }}
@@ -240,7 +276,7 @@ const [bookingTime, setBookingTime] = useState(null);
                     </div>
                     <h3 className="text-lg font-bold">{doctor.name}</h3>
                     <p className="text-sm text-cyan-100">{doctor.specialty}</p>
-                    <p className="text-xs text-cyan-200 mt-1">{doctor.experience}</p>
+                    <p className="mt-1 text-xs text-cyan-200">{doctor.experience}</p>
                   </div>
 
                   <div className="p-4">
@@ -318,98 +354,287 @@ if (step === "ticket") {
 
   const downloadTicket = () => {
     const doc = new jsPDF();
-    doc.setFontSize(20);
-    doc.text('OPD Appointment Ticket', 20, 30);
+    
+    // Set background color
+    doc.setFillColor(59, 130, 246); // Blue background
+    doc.rect(0, 0, 210, 297, 'F');
+    
+    // Add decorative border
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(2);
+    doc.rect(10, 10, 190, 277);
+    
+    // Header
+    doc.setFontSize(24);
+    doc.setTextColor(255, 255, 255);
+    doc.text('OPD APPOINTMENT TOKEN', 105, 30, { align: 'center' }, {fontstyle: 'bold'});
+    
     doc.setFontSize(12);
-    doc.text(`Token Number: #${generatedToken}`, 20, 50);
-    doc.text(`Name: ${formData.firstName} ${formData.lastName}`, 20, 60);
-    doc.text(`Gender: ${formData.gender}`, 20, 70);
-    doc.text(`Age: ${formData.age}`, 20, 80);
-    doc.text(`Location: ${formData.address}`, 20, 90);
-    doc.text(`Department: ${selectedDept.name}`, 20, 100);
-    doc.text(`Doctor: ${selectedDoctor.name}`, 20, 110);
-    doc.text(`Booking Time: ${bookingTime?.toLocaleString()}`, 20, 120);
-    doc.text(`Estimated Waiting Time: ${hours}h ${minutes}m`, 20, 130);
-    doc.save('OPD_Ticket.pdf');
+    doc.setTextColor(224, 242, 254);
+    doc.text('Hospital Management System', 105, 40, { align: 'center' });
+    
+    // Token Number - Large and prominent
+    doc.setFontSize(18);
+    doc.setTextColor(255, 193, 7);
+    doc.text(`TOKEN #${generatedToken}`, 105, 60, { align: 'center' });
+    
+    // Patient Photo (if available)
+    if (formData.photo) {
+      try {
+        // Add photo in a circle - jsPDF can handle base64 data URLs
+        doc.addImage(formData.photo, 'JPEG', 75, 70, 30, 30);
+        // Add circular border
+        doc.setDrawColor(255, 255, 255);
+        doc.setLineWidth(2);
+        doc.circle(90, 85, 16);
+      } catch (error) {
+        console.log('Error adding photo to PDF:', error);
+        // Fallback: add a placeholder circle
+        doc.setDrawColor(255, 255, 255);
+        doc.setLineWidth(2);
+        doc.circle(90, 85, 15);
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.text('PHOTO', 90, 90, { align: 'center' });
+      }
+    } else {
+      // No photo uploaded - add placeholder
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(2);
+      doc.circle(90, 85, 15);
+      doc.setFontSize(10);
+      doc.setTextColor(255, 255, 255);
+      doc.text('PHOTO', 90, 90, { align: 'center' });
+    }
+    
+    // Patient Information Section
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.text('PATIENT INFORMATION', 20, 120);
+    
+    doc.setFontSize(11);
+    doc.setTextColor(224, 242, 254);
+    doc.text(`Name: ${formData.firstName} ${formData.lastName}`, 20, 135);
+    doc.text(`Gender: ${formData.gender}`, 20, 145);
+    doc.text(`Age: ${formData.age} years`, 20, 155);
+    doc.text(`Location: ${formData.address}`, 20, 165);
+    
+    // Appointment Details Section
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.text('APPOINTMENT DETAILS', 110, 120);
+    
+    doc.setFontSize(11);
+    doc.setTextColor(224, 242, 254);
+    doc.text(`Department: ${selectedDept.name}`, 110, 135);
+    doc.text(`Doctor: ${selectedDoctor.name}`, 110, 145);
+    doc.text(`Booking Time: ${bookingTime?.toLocaleString()}`, 110, 155);
+    doc.text(`Est. Wait Time: ${hours}h ${minutes}m`, 110, 165);
+    
+    // Important Notes
+    doc.setFontSize(12);
+    doc.setTextColor(255, 255, 255);
+    doc.text('IMPORTANT NOTES:', 20, 190);
+    
+    doc.setFontSize(9);
+    doc.setTextColor(255, 193, 7);
+    doc.text('• Please arrive 15 minutes early', 20, 200);
+    doc.text('• Bring this token and ID proof', 20, 210);
+    doc.text('• Follow queue number order', 20, 220);
+    doc.text('• No refund for cancellation', 20, 230);
+    
+    // Footer
+    doc.setFontSize(8);
+    doc.setTextColor(224, 242, 254);
+    doc.text('This token is valid only for the scheduled date and time.', 105, 250, { align: 'center' });
+    doc.text(`Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 105, 260, { align: 'center' });
+    
+    // Add some decorative elements
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(1);
+    doc.circle(20, 20, 5);
+    doc.circle(190, 20, 3);
+    doc.circle(20, 277, 3);
+    doc.circle(190, 277, 4);
+    
+    doc.save(`OPD_Token_${generatedToken}.pdf`);
   };
 
   return (
-    <div className="max-w-lg p-8 mx-auto bg-white border shadow-2xl rounded-2xl border-slate-200">
+    <div className="max-w-4xl mx-auto">
+      {/* Ticket Display */}
+      <div className="relative overflow-hidden shadow-2xl bg-gradient-to-br from-blue-600 via-cyan-500 to-teal-500 rounded-3xl">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}></div>
+        </div>
 
-      <div className="pb-6 text-center border-b">
-        <h1 className="text-3xl font-bold text-cyan-600">
-          OPD Appointment Ticket
-        </h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Please keep this ticket for your consultation
-        </p>
+        <div className="relative p-8">
+          {/* Header */}
+          <div className="mb-8 text-center">
+            <div className="inline-flex items-center justify-center w-20 h-20 mb-4 bg-white rounded-full shadow-lg">
+              <span className="text-3xl"></span>
+            </div>
+            <h1 className="mb-2 text-4xl font-bold text-white">
+              OPD APPOINTMENT TOKEN
+            </h1>
+            <p className="text-lg text-cyan-100">Hospital Management System</p>
+          </div>
+
+          <div className="grid gap-8 md:grid-cols-2">
+            {/* Left Side - Patient Info */}
+            <div className="space-y-4">
+              <div className="p-6 border bg-white/10 backdrop-blur-sm rounded-2xl border-white/20">
+                <h3 className="flex items-center gap-2 mb-4 text-xl font-bold text-white">
+                  <span></span> Patient Information
+                </h3>
+                
+                <div className="space-y-3 text-white">
+                  <div className="flex items-center justify-between py-2 border-b border-white/20">
+                    <span className="font-medium">Token Number:</span>
+                    <span className="text-2xl font-bold text-yellow-300">#{generatedToken}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2 border-b border-white/20">
+                    <span className="font-medium">Name:</span>
+                    <span className="font-semibold">{formData.firstName} {formData.lastName}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2 border-b border-white/20">
+                    <span className="font-medium">Gender:</span>
+                    <span>{formData.gender}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2 border-b border-white/20">
+                    <span className="font-medium">Age:</span>
+                    <span>{formData.age} years</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2">
+                    <span className="font-medium">Location:</span>
+                    <span className="text-right truncate max-w-48">{formData.address}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Appointment Details */}
+              <div className="p-6 border bg-white/10 backdrop-blur-sm rounded-2xl border-white/20">
+                <h3 className="flex items-center gap-2 mb-4 text-xl font-bold text-white">
+                  <span>📅</span> Appointment Details
+                </h3>
+                
+                <div className="space-y-3 text-white">
+                  <div className="flex items-center justify-between py-2 border-b border-white/20">
+                    <span className="font-medium">Department:</span>
+                    <span className="font-semibold">{selectedDept.name}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2 border-b border-white/20">
+                    <span className="font-medium">Doctor:</span>
+                    <span className="font-semibold">{selectedDoctor.name}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2 border-b border-white/20">
+                    <span className="font-medium">Booking Time:</span>
+                    <span className="text-sm">{bookingTime?.toLocaleString()}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2">
+                    <span className="font-medium">Est. Wait Time:</span>
+                    <span className="font-bold text-orange-300">{hours}h {minutes}m</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Side - Photo and QR */}
+            <div className="space-y-6">
+              {/* Patient Photo */}
+              <div className="p-6 border bg-white/10 backdrop-blur-sm rounded-2xl border-white/20">
+                <h3 className="mb-4 text-xl font-bold text-center text-white">Patient Photo</h3>
+                <div className="flex justify-center">
+                  {formData.photo ? (
+                    <div className="relative">
+                      <img
+                        src={formData.photo}
+                        alt="Patient"
+                        className="object-cover w-32 h-32 border-4 border-white rounded-full shadow-lg"
+                      />
+                      <div className="absolute flex items-center justify-center w-8 h-8 bg-green-500 rounded-full -bottom-2 -right-2">
+                        <span className="text-sm text-white">✓</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center w-32 h-32 border-4 rounded-full bg-white/20 border-white/30">
+                      <span className="text-4xl text-white">👤</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* QR Code Placeholder */}
+              <div className="p-6 border bg-white/10 backdrop-blur-sm rounded-2xl border-white/20">
+                <h3 className="mb-4 text-xl font-bold text-center text-white">Scan to Verify</h3>
+                <div className="flex justify-center">
+                  <div className="flex items-center justify-center w-32 h-32 bg-white border-2 rounded-lg border-white/30">
+                    <div className="text-center">
+                      <div className="mb-2 text-6xl">📱</div>
+                      <p className="text-xs text-gray-600">QR Code</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Important Notes */}
+              <div className="p-4 border bg-red-500/20 backdrop-blur-sm rounded-2xl border-red-400/30">
+                <h4 className="flex items-center gap-2 mb-2 text-lg font-bold text-white">
+                  <span>⚠️</span> Important Notes
+                </h4>
+                <ul className="space-y-1 text-sm text-white/90">
+                  <li>• Please arrive 15 minutes early</li>
+                  <li>• Bring this token and ID proof</li>
+                  <li>• Follow queue number order</li>
+                  <li>• No refund for cancellation</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="pt-6 mt-8 text-center border-t border-white/20">
+            <p className="text-sm text-cyan-100">
+              This token is valid only for the scheduled date and time.
+              For any queries, contact hospital reception.
+            </p>
+            <p className="mt-2 text-xs text-white/80">
+              Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
+            </p>
+          </div>
+        </div>
+
+        {/* Decorative Elements */}
+        <div className="absolute w-12 h-12 rounded-full top-4 left-4 bg-white/10"></div>
+        <div className="absolute w-8 h-8 rounded-full top-4 right-4 bg-white/10"></div>
+        <div className="absolute w-6 h-6 rounded-full bottom-4 left-4 bg-white/10"></div>
+        <div className="absolute w-10 h-10 rounded-full bottom-4 right-4 bg-white/10"></div>
       </div>
 
-      <div className="mt-6 space-y-4 text-slate-800">
-
-        <div className="flex justify-between">
-          <span className="font-semibold">Token Number:</span>
-          <span className="text-2xl font-bold text-blue-600">
-            #{generatedToken}
-          </span>
-        </div>
-
-        <div className="flex justify-between">
-          <span>Name:</span>
-          <span>{formData.firstName} {formData.lastName}</span>
-        </div>
-
-        <div className="flex justify-between">
-          <span>Gender:</span>
-          <span>{formData.gender}</span>
-        </div>
-
-        <div className="flex justify-between">
-          <span>Age:</span>
-          <span>{formData.age}</span>
-        </div>
-
-        <div className="flex justify-between">
-          <span>Location:</span>
-          <span>{formData.address}</span>
-        </div>
-
-        <div className="flex justify-between">
-          <span>Department:</span>
-          <span>{selectedDept.name}</span>
-        </div>
-
-        <div className="flex justify-between">
-          <span>Doctor:</span>
-          <span>{selectedDoctor.name}</span>
-        </div>
-
-        <div className="flex justify-between">
-          <span>Booking Time:</span>
-          <span>{bookingTime?.toLocaleString()}</span>
-        </div>
-
-        <div className="flex justify-between">
-          <span>Estimated Waiting Time:</span>
-          <span className="font-semibold text-orange-600">
-            {hours}h {minutes}m
-          </span>
-        </div>
-      </div>
-
-      <div className="flex gap-4 mt-8">
+      {/* Action Buttons */}
+      <div className="flex max-w-md gap-4 mx-auto mt-8">
         <button
           onClick={downloadTicket}
-          className="flex-1 py-3 font-semibold text-white rounded-lg bg-cyan-500 hover:bg-cyan-600"
+          className="flex items-center justify-center flex-1 gap-2 px-6 py-4 font-bold text-white transition-all duration-300 transform shadow-lg rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl hover:scale-105"
         >
-          Download Ticket
+          <span>📥</span> Download Ticket
         </button>
 
         <button
           onClick={() => window.location.reload()}
-          className="flex-1 py-3 font-semibold rounded-lg bg-slate-300 hover:bg-slate-400"
+          className="flex items-center justify-center flex-1 gap-2 px-6 py-4 font-bold transition-all duration-300 transform bg-white border-2 border-gray-300 shadow-lg rounded-xl hover:border-gray-400 hover:shadow-xl hover:scale-105"
         >
-          Book New
+          <span>🔄</span> Book New
         </button>
       </div>
     </div>
@@ -452,6 +677,10 @@ if (step === "ticket") {
       <form
   onSubmit={(e) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return; // Stop submission if validation fails
+    }
 
     // Generate token based on doctor queue
     const currentQueue = patientQueues[selectedDoctor.name] || 0;
@@ -518,7 +747,7 @@ if (step === "ticket") {
           </div>
         </div>
 
-        {/* Age & Contact */}
+        {/* Age & Date of Birth */}
         <div className="grid gap-6 md:grid-cols-2">
           <div>
             <label className="block mb-2 font-semibold text-slate-900">Age *</label>
@@ -529,23 +758,38 @@ if (step === "ticket") {
               onChange={handleChange}
               placeholder="Enter your age"
               required
-              className="w-full px-4 py-3 transition border rounded-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+              className={`w-full px-4 py-3 transition border rounded-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${errors.ageMatch ? 'border-red-500' : ''}`}
             />
+            {errors.ageMatch && <p className="mt-1 text-sm text-red-600">{errors.ageMatch}</p>}
           </div>
 
           <div>
-            <label className="block mb-2 font-semibold text-slate-900">Contact No *</label>
-            <div className="flex mt-0">
-              <span className="flex items-center px-4 font-medium border border-r-0 rounded-l-lg bg-slate-100 border-slate-300 text-slate-700">
-                🇳🇵 +977
-              </span>
-              <input
-                type="tel"
-                required
-                placeholder="Contact number"
-                className="w-full px-4 py-3 transition border rounded-r-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-              />
-            </div>
+            <label className="block mb-2 font-semibold text-slate-900">Date of Birth *</label>
+            <input
+              type="date"
+              name="dateOfBirth"
+              value={formData.dateOfBirth}
+              onChange={handleChange}
+              required
+              className={`w-full px-4 py-3 transition border rounded-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${errors.ageMatch ? 'border-red-500' : ''}`}
+            />
+            {errors.ageMatch && <p className="mt-1 text-sm text-red-600">{errors.ageMatch}</p>}
+          </div>
+        </div>
+
+        {/* Contact No */}
+        <div>
+          <label className="block mb-2 font-semibold text-slate-900">Contact No *</label>
+          <div className="flex mt-0">
+            <span className="flex items-center px-4 font-medium border border-r-0 rounded-l-lg bg-slate-100 border-slate-300 text-slate-700">
+              🇳🇵 +977
+            </span>
+            <input
+              type="tel"
+              required
+              placeholder="Contact number"
+              className="w-full px-4 py-3 transition border rounded-r-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+            />
           </div>
         </div>
 
@@ -589,15 +833,43 @@ if (step === "ticket") {
             className="w-full px-4 py-3 transition border rounded-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
           />
         </div>
+        
+        {/* Upload Photo */}
+        <div>
+          <label className="block mb-2 font-semibold text-slate-900">
+            Upload Your Photo *
+          </label>
+          <input
+            type="file"
+            name="photo"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    photo: e.target.result,
+                  }));
+                };
+                reader.readAsDataURL(file);
+              }
+            }}
+            required
+            className="w-full px-4 py-3 transition bg-white border rounded-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-cyan-100 file:text-cyan-700 hover:file:bg-cyan-200 file:cursor-pointer"
+          />
+        </div>
 
-        {/* Emergency Details */}
+
+        {/*Special Care Category*/}
         <div className="p-6 border-2 rounded-lg bg-gradient-to-br from-cyan-50 to-blue-50 border-cyan-200">
           <h2 className="mb-4 text-xl font-bold text-slate-900">
-            Emergency Details
+            Special Care Category
           </h2>
 
           <div className="grid gap-4 mb-6 md:grid-cols-2">
-            {["Pregnant", "Bleeding", "Unconscious", "Accident Case"].map((item) => (
+            {["Pregnant", "Bleeding", "Person with disability", "Senior citizen"].map((item) => (
               <label key={item} className="flex items-center gap-3 cursor-pointer text-slate-700">
                 <input type="checkbox" className="w-4 h-4 rounded cursor-pointer accent-cyan-500" />
                 <span className="font-medium">{item}</span>
@@ -670,6 +942,7 @@ if (step === "ticket") {
           />
         </div>
 
+        
         {/* Buttons */}
         <div className="flex gap-4 mt-8">
           <button
