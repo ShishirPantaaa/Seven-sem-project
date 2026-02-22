@@ -23,7 +23,7 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <img className="w-10 h-10 sm:w-12 sm:h-12" src="logo.png" alt="Priority OPD System Logo" />
             <h1 className="text-lg font-bold text-transparent sm:text-xl md:text-2xl bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text">
-              Priority OPD
+              PulseQueue
             </h1>
           </div>
 

@@ -259,7 +259,7 @@ const handleChange = (e) => {
                   {/* Recommended Badge */}
                   {isRecommended && (
                     <div className="absolute top-0 right-0 z-10 px-3 py-1 text-xs font-bold text-white bg-green-500 rounded-bl-lg">
-                      ⭐ RECOMMENDED
+                       RECOMMENDED
                     </div>
                   )}
 

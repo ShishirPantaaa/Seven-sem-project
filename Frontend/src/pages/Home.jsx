@@ -36,10 +36,10 @@ export default function Home() {
             <div className="space-y-6">
               <div className="space-y-3">
                 <div className="inline-block px-4 py-2 text-sm font-semibold border rounded-full bg-cyan-500/30 text-cyan-300 border-cyan-400/70 backdrop-blur-md">
-                  ✨ Smart Healthcare Solution
+                   Smart Healthcare Solution
                 </div>
-                <h1 className="text-5xl font-bold leading-tight text-white md:text-7xl drop-shadow-lg">
-                  Revolutionary OPD Queue Management
+                <h1 className="text-3xl font-bold leading-tight text-white md:text-7xl drop-shadow-lg">
+                  A Smarter Revolution in OPD Queue Management
                 </h1>
               </div>
               

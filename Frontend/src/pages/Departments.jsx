@@ -397,15 +397,15 @@ export default function Departments() {
                 >
                   {/* RECOMMENDED BADGE */}
                   {isRecommended && (
-                    <div className="absolute top-0 right-0 z-20 px-4 py-2 text-white rounded-bl-lg bg-gradient-to-r from-amber-500 to-orange-600">
-                      ⭐ Recommended
+                    <div className="absolute top-0 right-0 z-20 px-1.5 py-0.5 text-white rounded-bl-lg bg-gradient-to-r from-amber-500 to-orange-600">
+                       Recommended
                     </div>
                   )}
 
                   {/* FASTEST AVAILABLE BADGE */}
                   {isFastest && !isRecommended && (
-                    <div className="absolute top-0 right-0 z-20 px-4 py-2 text-white rounded-bl-lg bg-gradient-to-r from-green-500 to-emerald-600">
-                      ⚡ Available Soon
+                   <div className="absolute top-0 right-0 z-20 px-1.5 py-0.5  text-white rounded-bl bg-gradient-to-r from-green-500 to-emerald-600">
+                              Available Soon
                     </div>
                   )}
 
