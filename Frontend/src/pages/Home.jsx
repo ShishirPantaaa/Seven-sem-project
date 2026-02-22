@@ -38,13 +38,13 @@ export default function Home() {
                 <div className="inline-block px-4 py-2 text-sm font-semibold border rounded-full bg-cyan-500/30 text-cyan-300 border-cyan-400/70 backdrop-blur-md">
                    Smart Healthcare Solution
                 </div>
-                <h1 className="text-3xl font-bold leading-tight text-white md:text-7xl drop-shadow-lg">
-                  A Smarter Revolution in OPD Queue Management
-                </h1>
+                <h3 className="text-3xl font-bold leading-tight text-white md:text-7xl drop-shadow-lg">
+                  {/* A Smarter Revolution in OPD Queue Management */}
+                </h3>
               </div>
               
               <p className="max-w-2xl mx-auto text-lg leading-relaxed md:text-2xl text-cyan-50 drop-shadow-md">
-                Say goodbye to long waiting times. Our intelligent priority-based system ensures faster, smarter, and more efficient healthcare delivery for every patient.
+               OPD never like before. Smart, digital and Patient Friendly.
               </p>
               
               <div className="flex flex-col justify-center gap-4 pt-8 sm:flex-row">

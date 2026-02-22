@@ -383,10 +383,11 @@ if (step === "ticket") {
       try {
         // Add photo in a circle - jsPDF can handle base64 data URLs
         doc.addImage(formData.photo, 'JPEG', 75, 70, 30, 30);
-        // Add circular border
+         // Add circular border
         doc.setDrawColor(255, 255, 255);
         doc.setLineWidth(2);
         doc.circle(90, 85, 16);
+       
       } catch (error) {
         console.log('Error adding photo to PDF:', error);
         // Fallback: add a placeholder circle
