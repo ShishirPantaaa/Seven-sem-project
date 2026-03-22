@@ -1,5 +1,6 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -14,6 +15,14 @@ export default function Navbar() {
         ? "text-cyan-300 border-b-2 border-cyan-300 pb-1"
         : "text-white hover:text-cyan-200"
     }`;
+
+  const auth = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    auth.logout();
+    navigate("/");
+  };
 
   return (
     <nav className="sticky top-0 z-50 shadow-lg bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900">
@@ -44,15 +53,28 @@ export default function Navbar() {
             >
               Contact
             </NavLink>
-            <NavLink to="/queue" className={navLinkClass}>
-              Queue
-            </NavLink>
             <NavLink
               to="/book-token"
               className="px-4 py-2 font-semibold text-white transition-all duration-300 transform rounded-lg shadow-md bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 hover:shadow-lg hover:scale-105"
             >
               Book Token
             </NavLink>
+
+            {auth.user ? (
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 font-semibold text-white transition-all duration-300 transform rounded-lg shadow-md bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 hover:shadow-lg hover:scale-105"
+              >
+                Logout
+              </button>
+            ) : (
+              <NavLink
+                to="/login"
+                className="px-4 py-2 font-semibold text-white transition-all duration-300 transform rounded-lg shadow-md bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 hover:shadow-lg hover:scale-105"
+              >
+                Login
+              </NavLink>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -142,25 +164,32 @@ export default function Navbar() {
               Contact
             </NavLink>
             <NavLink
-              to="/queue"
-              className={({ isActive }) =>
-                `block px-4 py-2 rounded-lg transition-all duration-300 ${
-                  isActive
-                    ? "bg-cyan-600 text-white"
-                    : "text-white hover:bg-slate-700"
-                }`
-              }
-              onClick={() => setIsOpen(false)}
-            >
-              Queue
-            </NavLink>
-            <NavLink
               to="/book-token"
               className="block px-4 py-2 font-semibold text-center text-white transition-all duration-300 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
               onClick={() => setIsOpen(false)}
             >
               Book Token
             </NavLink>
+
+            {auth.user ? (
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setIsOpen(false);
+                }}
+                className="w-full px-4 py-2 font-semibold text-center text-white transition-all duration-300 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600"
+              >
+                Logout
+              </button>
+            ) : (
+              <NavLink
+                to="/login"
+                className="block px-4 py-2 font-semibold text-center text-white transition-all duration-300 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+                onClick={() => setIsOpen(false)}
+              >
+                Login
+              </NavLink>
+            )}
           </div>
         )}
       </div>
