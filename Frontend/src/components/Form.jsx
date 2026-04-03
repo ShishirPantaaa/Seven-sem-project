@@ -633,8 +633,8 @@ const handleChange = (e) => {
                         }}
                       />
                     </div>
-                      <div className="min-w-0">
-                        <h3 className="text-lg font-bold leading-tight text-slate-900 whitespace-nowrap overflow-hidden text-ellipsis">{doctor.name}</h3>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-lg font-bold leading-tight text-slate-900 break-words">{doctor.name}</h3>
                         <p className="mt-0.5 text-sm text-cyan-700">{doctor.specialty}</p>
                         <p className="mt-1 text-xs text-slate-500">{qualifications}</p>
                       </div>

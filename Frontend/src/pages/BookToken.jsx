@@ -7,7 +7,7 @@ export default function BookToken() {
 
   return (
     <div className="min-h-screen px-4 py-12 bg-gradient-to-b from-slate-50 via-slate-100 to-slate-50">
-      <div className="max-w-2xl mx-auto">
+      <div className="mx-auto w-full max-w-2xl md:max-w-4xl xl:max-w-6xl">
         <div className="mb-12 text-center">
           <h1 className="mb-3 text-4xl font-bold text-transparent md:text-5xl bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text">
             Book Your OPD Token
