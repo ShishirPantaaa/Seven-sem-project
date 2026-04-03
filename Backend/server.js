@@ -10,6 +10,7 @@ const { authenticateToken } = require("./middleware/auth");
 const authRoutes = require("./routes/authRoutes");
 const departmentRoutes = require("./routes/departmentRoutes");
 const opdRoutes = require("./routes/opdRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 
@@ -55,6 +56,9 @@ app.use('/api/departments', departmentRoutes);
 
 // Mount OPD routes
 app.use('/api/opd', opdRoutes);
+
+// Mount admin routes
+app.use('/api/admin', adminRoutes);
 
 
 // Log registered routes (for debugging)

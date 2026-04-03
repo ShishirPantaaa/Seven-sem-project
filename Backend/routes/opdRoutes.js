@@ -30,7 +30,6 @@ router.put('/doctors/:doctorId/availability', updateDoctorAvailability);
 // Get real-time queue count for a doctor
 router.get('/queue-count', getQueueCount);
 router.get('/recommended-doctor', getRecommendedDoctor);
-// router.get('/remaining-slots', getRemainingSlots);
 
 // Alternative route for testing
 router.get('/test-queue-count', (req, res) => {

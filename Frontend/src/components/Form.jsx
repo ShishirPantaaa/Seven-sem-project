@@ -1,10 +1,35 @@
 import { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
 import { useAuth } from "../context/AuthContext";
-import { departments, doctorsByDept } from "../data/departmentsData";
+
+const DEPARTMENT_COLORS = [
+  "from-red-500 to-orange-500",
+  "from-cyan-500 to-blue-600",
+  "from-emerald-500 to-teal-600",
+  "from-indigo-500 to-sky-600",
+  "from-amber-500 to-yellow-600",
+  "from-fuchsia-500 to-pink-600",
+];
+
+const getDepartmentImage = (name) => {
+  const key = (name || "").trim().toLowerCase();
+  const imageMap = {
+    emergency: "/emergancy.jpg",
+    cardiology: "/Cardiology.jpg",
+    neurology: "/Neurology.jpg",
+    orthopedics: "/Orthopedics.jpg",
+    dermatology: "/Dermatology.jpg",
+    pediatrics: "/Pediatrics.jpg",
+  };
+  return imageMap[key] || "/mainbanner.jpg";
+};
 
 export default function OPDForm({ preSelectedDept, preSelectedDoctor }) {
   const auth = useAuth();
+  const [departments, setDepartments] = useState([]);
+  const [doctorsByDept, setDoctorsByDept] = useState({});
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState("");
 
   // Helper utilities
   const calculateAge = (dob) => {
@@ -59,12 +84,13 @@ export default function OPDForm({ preSelectedDept, preSelectedDoctor }) {
   const [estimatedWaitTime, setEstimatedWaitTime] = useState(null);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   // Visit date (for booking) - default to today or next available non-Saturday.
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
-    const safeDate = isSaturday(today) ? getNextAvailableDay(today) : today;
-    return formatISODate(safeDate);
+    const defaultDate = isSaturday(today) ? getNextAvailableDay(today) : today;
+    return formatISODate(defaultDate);
   });
   const [dateError, setDateError] = useState(null);
 
@@ -141,6 +167,12 @@ const handleChange = (e) => {
   }
 };
 
+  const getLastBookableDate = (baseDate = new Date()) => {
+    const maxDate = new Date(baseDate);
+    maxDate.setDate(maxDate.getDate() + 2);
+    return maxDate;
+  };
+
   const handleDateChange = (e) => {
     const value = e.target.value;
 
@@ -152,27 +184,35 @@ const handleChange = (e) => {
 
     const selected = new Date(value);
     const today = new Date();
-    const max = new Date(today);
-    max.setDate(max.getDate() + 3);
+    const lastBookable = getLastBookableDate(today);
 
     const normalize = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const selectedN = normalize(selected);
     const todayN = normalize(today);
-    const maxN = normalize(max);
+    const lastBookableN = normalize(lastBookable);
 
     if (selectedN < todayN) {
-      setDateError("Date must be today or later.");
+      setDateError("Past date booking is not allowed.");
       return;
     }
 
-    if (selectedN > maxN) {
-      setDateError("Date can be at most 3 days ahead.");
+    if (selectedN > lastBookableN) {
+      setDateError("Booking is open only for 3 days.");
       return;
     }
 
     if (isSaturday(selected)) {
-      setDateError("Saturdays are closed for booking. Please choose another date.");
+      setDateError("Hospital is closed on Saturday. Please choose another date.");
       return;
+    }
+
+    if (selectedN.getTime() === todayN.getTime()) {
+      const sameDayCutoff = new Date(today);
+      sameDayCutoff.setHours(16, 0, 0, 0);
+      if (today >= sameDayCutoff) {
+        setDateError("Booking for today is closed after 4:00 PM.");
+        return;
+      }
     }
 
     setDateError(null);
@@ -214,7 +254,7 @@ const handleChange = (e) => {
     } else {
       const today = new Date();
       const selected = new Date(selectedDate);
-      const maxDate = new Date(today); maxDate.setDate(maxDate.getDate() + 3);
+      const maxDate = getLastBookableDate(today);
 
       // normalize dates to avoid timezone differences
       const normalize = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -223,9 +263,17 @@ const handleChange = (e) => {
       const normalizedMax = normalize(maxDate);
 
       if (normalizedSelected < normalizedToday) {
-        newErrors.visitDate = 'Visit date cannot be before today.';
+        newErrors.visitDate = 'Past date booking is not allowed.';
       } else if (normalizedSelected > normalizedMax) {
-        newErrors.visitDate = 'Visit date can be at most 3 days from today.';
+        newErrors.visitDate = 'Booking is open only for 3 days.';
+      } else if (isSaturday(selected)) {
+        newErrors.visitDate = 'Hospital is closed on Saturday. Please choose another date.';
+      } else if (normalizedSelected.getTime() === normalizedToday.getTime()) {
+        const sameDayCutoff = new Date(today);
+        sameDayCutoff.setHours(16, 0, 0, 0);
+        if (today >= sameDayCutoff) {
+          newErrors.visitDate = 'Booking for today is closed after 4:00 PM.';
+        }
       }
     }
 
@@ -238,6 +286,104 @@ const handleChange = (e) => {
   };
 
   const [patientQueues, setPatientQueues] = useState({});
+
+  const applyCatalog = (liveDepartments) => {
+    const mappedDepartments = liveDepartments.map((dept, idx) => ({
+      department_id: dept.department_id || idx + 1,
+      title: dept.department_name,
+      description: dept.description || "Live department data from hospital dashboard",
+      image: getDepartmentImage(dept.department_name),
+      color: DEPARTMENT_COLORS[idx % DEPARTMENT_COLORS.length],
+      total_doctors: (dept.doctors || []).length,
+      available_doctors: (dept.doctors || []).filter((doctor) => doctor.status === "available").length,
+      unavailable_doctors: (dept.doctors || []).filter((doctor) => doctor.status !== "available").length,
+    }));
+
+    const mappedDoctorsByDept = liveDepartments.reduce((acc, dept) => {
+      const availableDoctors = (dept.doctors || [])
+        .filter((doctor) => doctor.status === "available")
+        .map((doctor) => ({
+          id: doctor.doctor_id,
+          name: doctor.doctor_name,
+          specialty: doctor.specialization || "OPD Specialist",
+          specialization: doctor.specialization || "OPD Specialist",
+          qualifications: doctor.qualifications || "N/A",
+          image: doctor.photo_url || "/doctors/default-doctor.jpg",
+          description: doctor.qualifications || "Experienced OPD doctor",
+        }));
+
+      acc[dept.department_name] = availableDoctors;
+      return acc;
+    }, {});
+
+    setDepartments(mappedDepartments);
+    setDoctorsByDept(mappedDoctorsByDept);
+  };
+
+  const fetchLegacyCatalog = async () => {
+    const baseRes = await fetch("http://localhost:5000/api/departments");
+    if (!baseRes.ok) {
+      throw new Error("Failed to fetch departments");
+    }
+
+    const baseDepartments = await baseRes.json();
+    const liveLikeDepartments = await Promise.all(
+      baseDepartments.map(async (dept) => {
+        const deptName = dept.department_name || dept.name;
+        let doctors = [];
+
+        try {
+          const doctorsRes = await fetch(`http://localhost:5000/api/departments/${dept.department_id}/doctors`);
+          if (doctorsRes.ok) {
+            doctors = await doctorsRes.json();
+          }
+        } catch (error) {
+          console.warn("Legacy doctor list fetch failed:", error);
+        }
+
+        return {
+          department_name: deptName,
+          description: dept.description || "",
+          doctors,
+        };
+      })
+    );
+
+    return liveLikeDepartments;
+  };
+
+  const fetchLiveCatalog = async () => {
+    try {
+      const response = await fetch("http://localhost:5000/api/departments/live");
+      if (!response.ok) {
+        throw new Error("Live endpoint unavailable");
+      }
+
+      const liveDepartments = await response.json();
+      applyCatalog(liveDepartments);
+      setCatalogError("");
+    } catch (error) {
+      try {
+        const fallbackDepartments = await fetchLegacyCatalog();
+        applyCatalog(fallbackDepartments);
+        setCatalogError("");
+      } catch (fallbackError) {
+        console.error("Error loading live catalog:", error);
+        console.error("Error loading fallback catalog:", fallbackError);
+        setDepartments([]);
+        setDoctorsByDept({});
+        setCatalogError("Could not load departments. Please start/restart backend server.");
+      }
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLiveCatalog();
+    const interval = setInterval(fetchLiveCatalog, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchQueueCountForDoctor = async (doctorName, departmentName) => {
     try {
@@ -283,6 +429,17 @@ const handleChange = (e) => {
   }, [selectedDept]);
 
   if (step === "department") {
+    if (catalogLoading) {
+      return (
+        <div className="w-full overflow-hidden bg-white border shadow-2xl rounded-2xl border-slate-200">
+          <div className="px-8 py-8 bg-gradient-to-r from-cyan-500 to-blue-600">
+            <h1 className="text-3xl font-bold text-center text-white md:text-4xl">Select Your Department</h1>
+            <p className="mt-2 text-center text-cyan-100">Loading live departments...</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="w-full overflow-hidden bg-white border shadow-2xl rounded-2xl border-slate-200">
         <div className="px-8 py-8 bg-gradient-to-r from-cyan-500 to-blue-600">
@@ -293,47 +450,72 @@ const handleChange = (e) => {
         </div>
 
         <div className="p-8 md:p-10">
+          {catalogError && (
+            <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {catalogError}
+            </div>
+          )}
+
+          {departments.length === 0 && (
+            <div className="rounded-lg border border-slate-300 bg-slate-50 px-4 py-6 text-center">
+              <p className="text-slate-700">No departments found.</p>
+              <button
+                type="button"
+                onClick={fetchLiveCatalog}
+                className="mt-3 rounded-lg bg-cyan-600 px-4 py-2 text-white hover:bg-cyan-700"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {departments.map((dept) => (
               <button
-                key={dept.title}
+                key={dept.department_id || dept.title}
                 onClick={() => {
                   setSelectedDept(dept);
                   setStep("doctor");
                 }}
-                className="relative overflow-hidden text-left transition-all duration-300 bg-white border shadow-lg group rounded-2xl hover:shadow-2xl hover:-translate-y-2 border-slate-200 hover:border-cyan-300"
+                className="group overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-cyan-300 hover:shadow-xl"
               >
-                <div
-                  className={`absolute inset-0 bg-gradient-to-r ${dept.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}
-                ></div>
-                <div className="relative z-10 p-6">
-                  {/* IMAGE CONTAINER */}
-                  <div className="relative h-40 mb-6 overflow-hidden rounded-xl">
+                <div className={`h-2 bg-gradient-to-r ${dept.color}`}></div>
+                <div className="p-5 sm:p-6">
+                  <div className="relative mb-4 h-32 overflow-hidden rounded-xl">
                     <img
                       src={dept.image}
                       alt={dept.title}
-                      className="object-cover w-full h-full transition duration-500 group-hover:scale-110"
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                       onError={(e) => {
                         e.target.src = `https://via.placeholder.com/400x160?text=${dept.title}`;
                       }}
                     />
-                    {/* GRADIENT OVERLAY */}
-                    <div
-                      className={`absolute inset-0 bg-gradient-to-t ${dept.color} opacity-30`}
-                    ></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/25 to-transparent"></div>
                   </div>
 
-                  {/* TEXT CONTENT */}
-                  <h3 className="mb-2 text-2xl font-bold text-slate-900">
-                    {dept.title}
-                  </h3>
-
-                  <p className="mb-4 text-slate-600">
+                  <h3 className="text-xl font-bold text-slate-900">{dept.title}</h3>
+                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">
                     {dept.description}
                   </p>
 
-                  <div className="flex items-center gap-2 font-semibold transition-transform text-cyan-600 group-hover:translate-x-2">
-                    View Doctors →
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs sm:text-sm">
+                    <div className="rounded-xl bg-slate-50 px-3 py-2">
+                      <p className="text-slate-500">Total</p>
+                      <p className="mt-1 font-semibold text-slate-900">{dept.total_doctors}</p>
+                    </div>
+                    <div className="rounded-xl bg-emerald-50 px-3 py-2">
+                      <p className="text-slate-500">Present</p>
+                      <p className="mt-1 font-semibold text-emerald-700">{dept.available_doctors}</p>
+                    </div>
+                    <div className="rounded-xl bg-rose-50 px-3 py-2">
+                      <p className="text-slate-500">Leave</p>
+                      <p className="mt-1 font-semibold text-rose-700">{dept.unavailable_doctors}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between text-sm font-semibold text-cyan-700">
+                    <span>Open Department</span>
+                    <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
                   </div>
                 </div>
               </button>
@@ -367,6 +549,26 @@ const handleChange = (e) => {
 
     // Auto-select doctor with minimum ETA
     const doctorWithMinETA = doctorsWithETA[0];
+
+    if (!doctorWithMinETA) {
+      return (
+        <div className="w-full overflow-hidden bg-white border shadow-2xl rounded-2xl border-slate-200">
+          <div className="px-8 py-8 bg-gradient-to-r from-cyan-500 to-blue-600">
+            <h1 className="text-3xl font-bold text-center text-white md:text-4xl">Select a Doctor</h1>
+            <p className="mt-2 text-center text-cyan-100">Step 2 of 3 - {selectedDept.title} Department</p>
+          </div>
+          <div className="p-8 md:p-10">
+            <p className="text-slate-700">No present doctors found in this department right now. Please choose another department.</p>
+            <button
+              onClick={() => setStep("department")}
+              className="px-6 py-3 mt-6 font-semibold transition rounded-lg bg-slate-300 hover:bg-slate-400 text-slate-900"
+            >
+              Back to Departments
+            </button>
+          </div>
+        </div>
+      );
+    }
     
     const handleDoctorSelection = (doctor, isAuto = false) => {
       setSelectedDoctor(doctor);
@@ -384,103 +586,87 @@ const handleChange = (e) => {
         </div>
 
         {/* Auto-Selected Doctor Alert */}
-        <div className="px-8 py-4 border-b border-blue-200 bg-blue-50">
-          <div className="p-4 bg-blue-100 rounded-lg">
-            <p className="font-semibold text-blue-900">💡 Smart Queue Management</p>
-            <p className="mt-1 text-sm text-blue-800">
-              <strong>{doctorWithMinETA.name}</strong> is recommended (Shortest Wait: {Math.round(doctorWithMinETA.eta / 60)}h {doctorWithMinETA.eta % 60}m)
+        <div className="border-b border-blue-100 bg-blue-50 px-6 py-4 sm:px-8">
+          <div className="rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm font-semibold text-blue-900">Smart Queue Management</p>
+            <p className="mt-1 text-sm text-blue-700">
+              Recommended doctor: <span className="font-bold">{doctorWithMinETA.name}</span> - 
+              {Math.round(doctorWithMinETA.eta / 60)}h {doctorWithMinETA.eta % 60}m wait
             </p>
-            <p className="mt-2 text-xs text-blue-700">You can select any doctor below, or proceed with the recommended option.</p>
           </div>
         </div>
 
-        <div className="p-8 md:p-10">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="p-6 sm:p-8 md:p-10">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 2xl:grid-cols-3 items-stretch">
             {doctorsWithETA.map((doctor) => {
               const isRecommended = doctor.id === doctorWithMinETA.id;
               const etaHours = Math.floor(doctor.eta / 60);
               const etaMinutes = doctor.eta % 60;
+              const qualifications = doctor.qualifications || doctor.experience || "N/A";
 
               return (
                 <div
                   key={doctor.id}
-                  className={`overflow-hidden transition-all duration-300 border-2 shadow-lg cursor-pointer rounded-xl hover:shadow-xl group ${
+                  className={`relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer ${
                     isRecommended
-                      ? "border-green-500 bg-gradient-to-br from-green-50 to-green-100"
-                      : "bg-gradient-to-br from-slate-50 to-slate-100 border-slate-300 hover:border-cyan-500"
+                      ? "border-green-400 ring-1 ring-green-100"
+                      : "border-slate-200 hover:border-cyan-300"
                   }`}
                   onClick={() => handleDoctorSelection(doctor, false)}
                 >
                   {/* Recommended Badge */}
                   {isRecommended && (
-                    <div className="absolute top-0 right-0 z-10 px-3 py-1 text-xs font-bold text-white bg-green-500 rounded-bl-lg">
-                       RECOMMENDED
+                    <div className="absolute right-0 top-0 z-10 rounded-bl-xl bg-green-500 px-3 py-1 text-xs font-bold tracking-wide text-white">
+                      RECOMMENDED
                     </div>
                   )}
 
-                  <div className="p-6 text-center text-white bg-gradient-to-r from-cyan-500 to-blue-600">
-                    <div className="relative w-20 h-20 mx-auto mb-4">
+                  <div className="flex flex-1 flex-col p-5 sm:p-6">
+                    <div className="flex items-center gap-4">
+                      <div className="relative h-18 w-18 shrink-0 sm:h-20 sm:w-20">
                       <img
                         src={doctor.image}
                         alt={doctor.name}
-                        className="object-cover w-full h-full border-4 border-white rounded-full shadow-lg"
+                          className="h-18 w-18 rounded-full border-4 border-cyan-100 object-cover shadow-md sm:h-20 sm:w-20"
                         onError={(e) => {
-                          e.target.src = `https://via.placeholder.com/80?text=${doctor.name.split(" ")[1]}`;
+                          e.target.src = "/doctors/default-doctor.jpg";
                         }}
                       />
                     </div>
-                    <h3 className="text-lg font-bold">{doctor.name}</h3>
-                    <p className="text-sm text-cyan-100">{doctor.specialty}</p>
-                    <p className="mt-1 text-xs text-cyan-200">{doctor.experience}</p>
-                  </div>
-
-                  <div className="p-4">
-                    <div className="flex items-center justify-between p-3 mb-3 rounded-lg bg-amber-50">
-                      <span className="text-sm text-slate-600">Rating</span>
-                      <div className="flex items-center gap-1">
-                        <span className="font-bold text-slate-900">{doctor.rating}</span>
-                        <span className="text-xs">⭐</span>
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-bold leading-tight text-slate-900 whitespace-nowrap overflow-hidden text-ellipsis">{doctor.name}</h3>
+                        <p className="mt-0.5 text-sm text-cyan-700">{doctor.specialty}</p>
+                        <p className="mt-1 text-xs text-slate-500">{qualifications}</p>
                       </div>
                     </div>
 
-                    {/* Experience */}
-                    <div className="flex items-center justify-between p-3 mb-3 rounded-lg bg-blue-50">
-                      <span className="text-sm text-slate-600">Experience</span>
-                      <span className="font-bold text-slate-900">{doctor.experience}</span>
-                    </div>
-
-                    {/* Reviews */}
-                    <div className="flex items-center justify-between p-3 mb-3 rounded-lg bg-purple-50">
-                      <span className="text-sm text-slate-600">Reviews</span>
-                      <span className="font-bold text-slate-900">{doctor.reviews}</span>
-                    </div>
-
-                    {/* Queue Information */}
-                    <div className="flex items-center justify-between p-3 mb-3 rounded-lg bg-green-50">
-                      <div>
-                        <p className="text-xs text-slate-600">Current Queue</p>
-                        <p className="font-bold text-slate-900">{doctor.patientCount} patients</p>
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-slate-50 px-4 py-3">
+                        <p className="text-xs text-slate-500">Queue</p>
+                        <p className="mt-1 text-lg font-bold text-slate-900">{doctor.patientCount}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-slate-600">Est. Wait</p>
-                        <p className="font-bold text-slate-900">
+                      <div className="rounded-xl bg-slate-50 px-4 py-3 text-right">
+                        <p className="text-xs text-slate-500">Wait</p>
+                        <p className="mt-1 text-lg font-bold text-slate-900">
                           {etaHours}h {etaMinutes}m
                         </p>
                       </div>
                     </div>
+                  </div>
 
+                  <div className="px-5 pb-5 sm:px-6 sm:pb-6">
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDoctorSelection(doctor, false);
                       }}
-                      className={`w-full py-2 font-semibold text-white transition rounded-lg group-hover:scale-105 ${
+                      className={`w-full rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
                         isRecommended
                           ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                           : "bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
                       }`}
                     >
-                      {isRecommended ? "Select (Recommended)" : "Select Doctor"} →
+                      {isRecommended ? "Select Recommended" : "Select Doctor"} →
                     </button>
                   </div>
                 </div>
@@ -490,7 +676,7 @@ const handleChange = (e) => {
 
           <button
             onClick={() => setStep("department")}
-            className="px-6 py-3 mt-6 font-semibold transition rounded-lg bg-slate-300 hover:bg-slate-400 text-slate-900"
+            className="mt-6 rounded-lg bg-slate-200 px-5 py-3 font-semibold text-slate-800 transition hover:bg-slate-300"
           >
             ← Back to Departments
           </button>
@@ -873,6 +1059,7 @@ if (step === "ticket") {
       <form
         onSubmit={async (e) => {
           e.preventDefault();
+          setSubmitError("");
 
           if (!validateForm()) {
             return;
@@ -897,6 +1084,16 @@ if (step === "ticket") {
             const data = await submitForm(payload);
             console.log("Server Response:", data);
 
+            if (data?.doctorUnavailable) {
+              setSubmitError(data.message || "Selected doctor is currently unavailable.");
+              return;
+            }
+
+            if (!data?.tokenNumber) {
+              setSubmitError("Booking failed: token was not generated. Please try again.");
+              return;
+            }
+
             alert("Your record is successfully submitted");
 
             setGeneratedToken(data.tokenNumber);
@@ -920,6 +1117,7 @@ if (step === "ticket") {
               alert("Your session has expired. Please login again.");
               window.location.href = "/login";
             } else {
+              setSubmitError(error.message || "Error submitting form.");
               alert("Error submitting form: " + error.message);
             }
           } finally {
@@ -928,6 +1126,11 @@ if (step === "ticket") {
         }}
         className="p-8 space-y-6 md:p-10"
       >
+        {submitError && (
+          <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {submitError}
+          </div>
+        )}
 
         {/* Name */}
         <div className="grid gap-6 md:grid-cols-2">
@@ -1136,13 +1339,14 @@ if (step === "ticket") {
           <div>
             <label className="block mb-2 font-semibold text-slate-900">Select Date *</label>
             <p className="mb-1 text-xs text-slate-500">
-              Saturdays are unavailable for booking (closed). Please pick another day.
+              Booking is open for today and the next 2 days (3 days total). Same-day booking closes at 4:00 PM.
             </p>
             <input
               type="date"
               required
               value={selectedDate}
-              min={formatISODate(isSaturday(new Date()) ? getNextAvailableDay(new Date()) : new Date())}
+              min={formatISODate(new Date())}
+              max={formatISODate(getLastBookableDate())}
               onChange={handleDateChange}
               className={`w-full px-4 py-3 transition border rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${
                 dateError ? 'border-red-500 ring-red-500 bg-red-100' : 'border-slate-300 bg-emerald-100 font-bold'

@@ -4,7 +4,7 @@
  */
 
 const validateBookToken = (req, res, next) => {
-  const { firstName, lastName, age, gender, contact, address, department, doctor } = req.body;
+  const { firstName, lastName, age, gender, contact, address, department, doctor, appointmentDate } = req.body;
 
   // Check required fields
   if (!firstName || typeof firstName !== 'string' || firstName.trim().length === 0) {
@@ -16,7 +16,7 @@ const validateBookToken = (req, res, next) => {
   if (!age || isNaN(age) || age < 0 || age > 150) {
     return res.status(400).json({ error: 'Age must be a valid number between 0 and 150' });
   }
-  if (!gender || !['Male', 'Female', 'Other'].includes(gender)) {
+  if (!gender || !['Male', 'Female', 'Other', 'Others'].includes(gender)) {
     return res.status(400).json({ error: 'Gender must be Male, Female, or Other' });
   }
   if (!contact || typeof contact !== 'string' || !/^[0-9]{10}$/.test(contact.trim())) {
@@ -32,13 +32,31 @@ const validateBookToken = (req, res, next) => {
     return res.status(400).json({ error: 'Doctor name is required' });
   }
 
+  // Booking is allowed only for the current local date.
+  if (!appointmentDate || typeof appointmentDate !== 'string') {
+    return res.status(400).json({ error: 'Appointment date is required in YYYY-MM-DD format' });
+  }
+
+  const requestedDate = new Date(appointmentDate);
+  if (Number.isNaN(requestedDate.getTime())) {
+    return res.status(400).json({ error: 'Invalid appointment date' });
+  }
+
+  const requestedLocalDay = new Date(
+    requestedDate.getFullYear(),
+    requestedDate.getMonth(),
+    requestedDate.getDate()
+  );
+
   // Sanitize inputs
   req.body.firstName = firstName.trim();
   req.body.lastName = lastName.trim();
+  req.body.gender = gender === 'Others' ? 'Other' : gender;
   req.body.contact = contact.trim();
   req.body.address = address.trim();
   req.body.department = department.trim();
   req.body.doctor = doctor.trim();
+  req.body.appointmentDate = `${requestedLocalDay.getFullYear()}-${String(requestedLocalDay.getMonth() + 1).padStart(2, '0')}-${String(requestedLocalDay.getDate()).padStart(2, '0')}`;
 
   next();
 };

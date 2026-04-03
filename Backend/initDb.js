@@ -29,6 +29,10 @@ const createTables = () => {
       doctor_id INT AUTO_INCREMENT PRIMARY KEY,
       doctor_name VARCHAR(255) NOT NULL,
       department_id INT,
+      specialization VARCHAR(255),
+      qualifications VARCHAR(255),
+      photo_url TEXT,
+      contact_no VARCHAR(20),
       status ENUM('available', 'unavailable') DEFAULT 'available',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (department_id) REFERENCES departments(department_id)
@@ -159,7 +163,40 @@ const createTables = () => {
 
   db.query(doctorsTable, (err) => {
     if (err) console.log('Error creating doctors table:', err);
-    else console.log('Doctors table ready');
+    else {
+      console.log('Doctors table ready');
+
+      const ensureDoctorColumn = (columnName, ddl) => {
+        const checkSql = `
+          SELECT COUNT(*) AS count
+          FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = ?
+            AND TABLE_NAME = 'doctors'
+            AND COLUMN_NAME = ?
+        `;
+
+        db.query(checkSql, [DB_NAME, columnName], (checkErr, results) => {
+          if (checkErr) {
+            console.log(`Error checking doctors column ${columnName}:`, checkErr);
+            return;
+          }
+
+          const exists = results?.[0]?.count > 0;
+          if (!exists) {
+            db.query(ddl, (alterErr) => {
+              if (alterErr) {
+                console.log(`Error creating doctors column ${columnName}:`, alterErr);
+              }
+            });
+          }
+        });
+      };
+
+      ensureDoctorColumn('specialization', 'ALTER TABLE doctors ADD COLUMN specialization VARCHAR(255)');
+      ensureDoctorColumn('qualifications', 'ALTER TABLE doctors ADD COLUMN qualifications VARCHAR(255)');
+      ensureDoctorColumn('photo_url', 'ALTER TABLE doctors ADD COLUMN photo_url TEXT');
+      ensureDoctorColumn('contact_no', 'ALTER TABLE doctors ADD COLUMN contact_no VARCHAR(20)');
+    }
   });
 
   db.query(tokensTable, (err) => {
@@ -196,6 +233,75 @@ const createTables = () => {
       ensureTokenColumn('appointment_date', 'ALTER TABLE tokens ADD COLUMN appointment_date DATE');
       ensureTokenColumn('appointment_time', 'ALTER TABLE tokens ADD COLUMN appointment_time TIME');
       ensureTokenColumn('eta_time', 'ALTER TABLE tokens ADD COLUMN eta_time DATETIME');
+    }
+  });
+
+  // Create admin_users table
+  const adminUsersTable = `
+    CREATE TABLE IF NOT EXISTS admin_users (
+      admin_id INT AUTO_INCREMENT PRIMARY KEY,
+      admin_username VARCHAR(100) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      admin_name VARCHAR(255) NOT NULL,
+      email VARCHAR(150),
+      role ENUM('admin', 'superadmin') DEFAULT 'admin',
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    );
+  `;
+
+  db.query(adminUsersTable, async (err) => {
+    if (err) {
+      console.log('Error creating admin_users table:', err);
+    } else {
+      console.log('Admin users table ready');
+
+      // Insert default admin if not exists
+      const bcrypt = require('bcrypt');
+      const defaultAdminUsername = 'admin';
+      const defaultAdminPassword = 'Project'; // Change this in production
+
+      try {
+        const checkAdmin = `SELECT * FROM admin_users WHERE admin_username = ?`;
+        db.query(checkAdmin, [defaultAdminUsername], async (err, results) => {
+          if (err) {
+            console.log('Error checking admin:', err);
+            return;
+          }
+
+          const hashedPassword = await bcrypt.hash(defaultAdminPassword, 10);
+
+          if (results.length === 0) {
+            const insertAdmin = `INSERT INTO admin_users (admin_username, password_hash, admin_name, email, role) 
+                                VALUES (?, ?, ?, ?, ?)`;
+            db.query(insertAdmin, 
+              [defaultAdminUsername, hashedPassword, 'System Administrator', 'admin@pulsequeue.local', 'superadmin'],
+              (insertErr) => {
+                if (insertErr) {
+                  console.log('Error inserting default admin:', insertErr);
+                } else {
+                  console.log('Default admin user created');
+                }
+              }
+            );
+          } else {
+            db.query(
+              'UPDATE admin_users SET password_hash = ? WHERE admin_username = ?',
+              [hashedPassword, defaultAdminUsername],
+              (updateErr) => {
+                if (updateErr) {
+                  console.log('Error updating default admin password:', updateErr);
+                } else {
+                  console.log('Default admin password updated');
+                }
+              }
+            );
+          }
+        });
+      } catch (error) {
+        console.log('Error in admin initialization:', error);
+      }
     }
   });
 };

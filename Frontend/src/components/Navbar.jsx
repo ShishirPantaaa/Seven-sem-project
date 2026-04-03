@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useAdminAuth } from "../context/AdminAuthContext";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,10 +18,16 @@ export default function Navbar() {
     }`;
 
   const auth = useAuth();
+  const { admin, adminLogout } = useAdminAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     auth.logout();
+    navigate("/");
+  };
+
+  const handleAdminLogout = () => {
+    adminLogout();
     navigate("/");
   };
 
@@ -60,20 +67,40 @@ export default function Navbar() {
               Book Token
             </NavLink>
 
-            {auth.user ? (
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 font-semibold text-white transition-all duration-300 transform rounded-lg shadow-md bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 hover:shadow-lg hover:scale-105"
-              >
-                Logout
-              </button>
+            {admin ? (
+              <div className="flex items-center gap-4">
+                <span className="text-cyan-300 text-sm font-semibold">Admin: {admin.name}</span>
+                <button
+                  onClick={handleAdminLogout}
+                  className="px-4 py-2 font-semibold text-white transition-all duration-300 transform rounded-lg shadow-md bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 hover:shadow-lg hover:scale-105"
+                >
+                  Admin Logout
+                </button>
+              </div>
             ) : (
-              <NavLink
-                to="/login"
-                className="px-4 py-2 font-semibold text-white transition-all duration-300 transform rounded-lg shadow-md bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 hover:shadow-lg hover:scale-105"
-              >
-                Login
-              </NavLink>
+              <>
+                <NavLink
+                  to="/admin-login"
+                  className="px-4 py-2 font-semibold text-white transition-all duration-300 transform rounded-lg shadow-md bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 hover:shadow-lg hover:scale-105"
+                >
+                  Admin Login
+                </NavLink>
+                {auth.user ? (
+                  <button
+                    onClick={handleLogout}
+                    className="px-4 py-2 font-semibold text-white transition-all duration-300 transform rounded-lg shadow-md bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 hover:shadow-lg hover:scale-105"
+                  >
+                    Logout
+                  </button>
+                ) : (
+                  <NavLink
+                    to="/login"
+                    className="px-4 py-2 font-semibold text-white transition-all duration-300 transform rounded-lg shadow-md bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 hover:shadow-lg hover:scale-105"
+                  >
+                    Login
+                  </NavLink>
+                )}
+              </>
             )}
           </div>
 
@@ -171,24 +198,50 @@ export default function Navbar() {
               Book Token
             </NavLink>
 
-            {auth.user ? (
-              <button
-                onClick={() => {
-                  handleLogout();
-                  setIsOpen(false);
-                }}
-                className="w-full px-4 py-2 font-semibold text-center text-white transition-all duration-300 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600"
-              >
-                Logout
-              </button>
+            {admin ? (
+              <>
+                <div className="px-4 py-2 text-sm font-semibold text-cyan-300">
+                  Admin: {admin.name}
+                </div>
+                <button
+                  onClick={() => {
+                    handleAdminLogout();
+                    setIsOpen(false);
+                  }}
+                  className="w-full px-4 py-2 font-semibold text-center text-white transition-all duration-300 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600"
+                >
+                  Admin Logout
+                </button>
+              </>
             ) : (
-              <NavLink
-                to="/login"
-                className="block px-4 py-2 font-semibold text-center text-white transition-all duration-300 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
-                onClick={() => setIsOpen(false)}
-              >
-                Login
-              </NavLink>
+              <>
+                <NavLink
+                  to="/admin-login"
+                  className="block px-4 py-2 font-semibold text-center text-white transition-all duration-300 rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Admin Login
+                </NavLink>
+                {auth.user ? (
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setIsOpen(false);
+                    }}
+                    className="w-full px-4 py-2 font-semibold text-center text-white transition-all duration-300 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600"
+                  >
+                    Logout
+                  </button>
+                ) : (
+                  <NavLink
+                    to="/login"
+                    className="block px-4 py-2 font-semibold text-center text-white transition-all duration-300 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Login
+                  </NavLink>
+                )}
+              </>
             )}
           </div>
         )}
