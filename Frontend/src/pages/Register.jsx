@@ -7,8 +7,6 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [warning, setWarning] = useState(null);
-  const [otp, setOtp] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -44,13 +42,11 @@ export default function Register() {
       }
 
       setSuccess(data.message);
-      setWarning(data.warning || null);
-      setOtp(data.otp || null);
 
-      // Navigate to OTP verification page.
+      // Navigate to OTP verification page
       setTimeout(() => {
         navigate(`/otp-verify?email=${encodeURIComponent(email)}`);
-      }, 500);
+      }, 1500);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -73,13 +69,9 @@ export default function Register() {
         )}
 
         {success && (
-          <div className="p-3 mt-6 text-sm text-green-700 bg-green-100 rounded">
-            {success}
-            {warning && (
-              <div className="mt-2 text-sm text-yellow-800">
-                {warning}
-              </div>
-            )}
+          <div className="p-3 mt-6 text-sm bg-green-100 rounded">
+            <p className="font-semibold text-green-800">✓ {success}</p>
+            <p className="text-xs text-green-700 mt-2">Check your email for the verification code. Redirecting...</p>
           </div>
         )}
 

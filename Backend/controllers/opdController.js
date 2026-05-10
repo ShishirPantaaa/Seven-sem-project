@@ -603,6 +603,268 @@ const getRecommendedDoctor = async (req, res) => {
   }
 };
 
+// Get real-time token status with current queue position
+const getTokenStatus = async (req, res) => {
+  try {
+    const { tokenId } = req.params;
+
+    const query = `
+      SELECT 
+        t.token_id,
+        t.token_number,
+        t.status,
+        t.appointment_date,
+        t.appointment_time,
+        t.eta_time,
+        t.consultation_start_time,
+        t.consultation_end_time,
+        t.is_expired,
+        p.first_name,
+        p.last_name,
+        d.doctor_name,
+        dept.name as department_name,
+        (SELECT COUNT(*) FROM tokens WHERE doctor_id = t.doctor_id 
+         AND appointment_date = t.appointment_date 
+         AND token_number < t.token_number 
+         AND status = 'waiting') as patients_ahead
+      FROM tokens t
+      JOIN patients p ON t.patient_id = p.patient_id
+      JOIN doctors d ON t.doctor_id = d.doctor_id
+      JOIN departments dept ON d.department_id = dept.department_id
+      WHERE t.token_id = ?
+    `;
+
+    const results = await new Promise((resolve, reject) => {
+      db.query(query, [tokenId], (err, results) => {
+        if (err) reject(err);
+        else resolve(results);
+      });
+    });
+
+    if (!results || results.length === 0) {
+      return res.status(404).json({ error: 'Token not found' });
+    }
+
+    const token = results[0];
+    res.json(token);
+  } catch (error) {
+    console.error('Error fetching token status:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Start consultation - marks token as on_consultation and updates times
+const startConsultation = async (req, res) => {
+  try {
+    const { tokenId } = req.params;
+    const now = new Date();
+    const consultationEndTime = new Date(now.getTime() + CONSULTATION_MINUTES * 60000);
+
+    const updateQuery = `
+      UPDATE tokens 
+      SET 
+        status = 'completed',
+        consultation_start_time = ?,
+        consultation_end_time = ?
+      WHERE token_id = ?
+    `;
+
+    await new Promise((resolve, reject) => {
+      db.query(updateQuery, [now, consultationEndTime, tokenId], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    res.json({ message: 'Consultation started', consultationEndTime });
+  } catch (error) {
+    console.error('Error starting consultation:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Handle appointment expiry and automatic token reschedule
+const handleAppointmentExpiry = async (req, res) => {
+  try {
+    const { tokenId } = req.params;
+
+    // Get token details
+    const tokenQuery = `
+      SELECT * FROM tokens WHERE token_id = ?
+    `;
+
+    const tokenResults = await new Promise((resolve, reject) => {
+      db.query(tokenQuery, [tokenId], (err, results) => {
+        if (err) reject(err);
+        else resolve(results);
+      });
+    });
+
+    if (!tokenResults || tokenResults.length === 0) {
+      return res.status(404).json({ error: 'Token not found' });
+    }
+
+    const token = tokenResults[0];
+    const appointmentDate = new Date(token.appointment_date);
+    const nextAvailableDate = getNextAvailableDay(appointmentDate);
+
+    // Mark as expired
+    const expireQuery = `
+      UPDATE tokens 
+      SET is_expired = TRUE, status = 'waiting'
+      WHERE token_id = ?
+    `;
+
+    await new Promise((resolve, reject) => {
+      db.query(expireQuery, [tokenId], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Get new token number for next available date
+    const getWaitingTokenCount = async (appointmentDateStr) => {
+      const tokenCountQuery = `
+        SELECT COUNT(*) as count FROM tokens
+        WHERE doctor_id = ? AND appointment_date = ? AND status = 'waiting' AND is_expired = FALSE
+      `;
+
+      const [tokenCountResult] = await new Promise((resolve, reject) => {
+        db.query(tokenCountQuery, [token.doctor_id, appointmentDateStr], (err, results) => {
+          if (err) reject(err);
+          else resolve(results);
+        });
+      });
+
+      return tokenCountResult.count;
+    };
+
+    const nextDateStr = formatLocalDate(nextAvailableDate);
+    const newTokenNumber = (await getWaitingTokenCount(nextDateStr)) + 1;
+
+    // Calculate new appointment time for next day
+    const scheduleStart = getDateAtTime(nextAvailableDate, OPD_START_HOUR, OPD_START_MINUTE);
+    const newAppointmentTime = calculateAppointmentTime(nextAvailableDate, newTokenNumber);
+    const newAppointmentTimeStr = newAppointmentTime.toTimeString().split(' ')[0];
+
+    // Create new token for next available date
+    const newTokenQuery = `
+      INSERT INTO tokens (patient_id, doctor_id, token_number, status, appointment_date, appointment_time, eta_time)
+      VALUES (?, ?, ?, 'waiting', ?, ?, ?)
+    `;
+
+    await new Promise((resolve, reject) => {
+      db.query(newTokenQuery, [token.patient_id, token.doctor_id, newTokenNumber, nextDateStr, newAppointmentTimeStr, newAppointmentTime], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    res.json({ 
+      message: 'Appointment expired and rescheduled',
+      newAppointmentDate: nextDateStr,
+      newAppointmentTime: newAppointmentTimeStr,
+      newTokenNumber
+    });
+  } catch (error) {
+    console.error('Error handling appointment expiry:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Get all waiting tokens for a doctor with real-time updates
+const getWaitingTokensRealtime = async (req, res) => {
+  try {
+    const { doctorId, date } = req.params;
+
+    const query = `
+      SELECT 
+        t.token_id,
+        t.token_number,
+        t.status,
+        t.appointment_time,
+        t.eta_time,
+        t.is_expired,
+        p.first_name,
+        p.last_name,
+        p.age,
+        p.gender,
+        p.contact,
+        (SELECT COUNT(*) FROM tokens t2 
+         WHERE t2.doctor_id = ? 
+         AND t2.appointment_date = ? 
+         AND t2.token_number < t.token_number 
+         AND t2.status = 'waiting'
+         AND t2.is_expired = FALSE) as patients_ahead
+      FROM tokens t
+      JOIN patients p ON t.patient_id = p.patient_id
+      WHERE t.doctor_id = ? AND t.appointment_date = ? AND t.status = 'waiting' AND t.is_expired = FALSE
+      ORDER BY t.token_number ASC
+    `;
+
+    const results = await new Promise((resolve, reject) => {
+      db.query(query, [doctorId, date, doctorId, date], (err, results) => {
+        if (err) reject(err);
+        else resolve(results);
+      });
+    });
+
+    res.json(results);
+  } catch (error) {
+    console.error('Error fetching waiting tokens:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Check and auto-expire old appointments
+const autoExpireAppointments = async (req, res) => {
+  try {
+    const now = new Date();
+    const currentDate = formatLocalDate(now);
+
+    // Get all completed tokens from earlier today that haven't been marked as expired
+    const expiredQuery = `
+      SELECT t.token_id, t.appointment_time 
+      FROM tokens t
+      WHERE 
+        t.appointment_date = ? 
+        AND t.status = 'completed' 
+        AND t.is_expired = FALSE
+        AND TIMESTAMP(CONCAT(t.appointment_date, ' ', t.appointment_time)) < NOW()
+    `;
+
+    const expiredResults = await new Promise((resolve, reject) => {
+      db.query(expiredQuery, [currentDate], (err, results) => {
+        if (err) reject(err);
+        else resolve(results);
+      });
+    });
+
+    let expiredCount = 0;
+
+    for (const token of expiredResults) {
+      await new Promise((resolve, reject) => {
+        const markQuery = `UPDATE tokens SET is_expired = TRUE WHERE token_id = ?`;
+        db.query(markQuery, [token.token_id], (err) => {
+          if (err) reject(err);
+          else {
+            expiredCount++;
+            resolve();
+          }
+        });
+      });
+    }
+
+    res.json({ 
+      message: `Auto-expired ${expiredCount} appointments`,
+      expiredCount
+    });
+  } catch (error) {
+    console.error('Error auto-expiring appointments:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 module.exports = {
   bookToken,
   getTokensByDoctor,
@@ -610,5 +872,10 @@ module.exports = {
   getDoctorsByDepartment,
   updateDoctorAvailability,
   getRecommendedDoctor,
-  getQueueCount
+  getQueueCount,
+  getTokenStatus,
+  startConsultation,
+  handleAppointmentExpiry,
+  getWaitingTokensRealtime,
+  autoExpireAppointments
 };

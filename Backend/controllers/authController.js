@@ -5,6 +5,7 @@ const db = require('../config/database');
 const { sendOtpEmail } = require('../utils/sendEmail');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'pulsequeue_secret';
+const ALLOW_OTP_FALLBACK = String(process.env.ALLOW_OTP_FALLBACK || 'false').toLowerCase() === 'true';
 
 const query = util.promisify(db.query).bind(db);
 
@@ -77,16 +78,19 @@ exports.sendOtp = async (req, res) => {
     }
 
     const { sent, error } = await sendOtpEmail(email, otp);
-    const response = { message: 'OTP sent to email', emailSent: sent };
+
     if (!sent) {
-      response.warning = 'Failed to send OTP email; check server logs (or use the OTP below) for the code.';
-      response.otp = otp;
-    }
-    if (error) {
-      response.error = error;
+      return res.status(502).json({ 
+        message: 'Failed to send OTP email',
+        error: error,
+        emailSent: false
+      });
     }
 
-    return res.json(response);
+    return res.json({
+      message: 'OTP sent to email',
+      emailSent: true
+    });
   } catch (err) {
     console.error('sendOtp error:', err);
     return res.status(500).json({ message: 'Failed to send OTP.', error: err.message });
@@ -103,7 +107,7 @@ exports.verifyOtp = async (req, res) => {
   try {
     const users = await query('SELECT * FROM users WHERE email = ?', [email]);
     if (!users.length) {
-      return res.status(400).json({ message: 'Invalid email or OTP.' });
+      return res.status(400).json({ message: 'Invalid email or verification code.' });
     }
 
     const user = users[0];

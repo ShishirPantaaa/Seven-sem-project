@@ -17,9 +17,18 @@ JWT_REFRESH_EXPIRY=7d
 
 ### Email Configuration (for OTP)
 EMAIL_SERVICE=gmail
-EMAIL_ADDRESS=your-email@gmail.com
-EMAIL_PASSWORD=your-app-password
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-google-app-password
+# Backward-compatible aliases also supported:
+# EMAIL_ADDRESS=your-email@gmail.com
+# EMAIL_PASSWORD=your-google-app-password
 EMAIL_FROM=PulseQueue <noreply@pulsequeue.com>
+# Optional SMTP custom provider:
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587
+# SMTP_SECURE=false
+# Development only: if true, API can return OTP when email sending fails.
+ALLOW_OTP_FALLBACK=false
 
 ### Server Configuration
 NODE_ENV=development

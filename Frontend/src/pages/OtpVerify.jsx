@@ -36,7 +36,7 @@ export default function OtpVerify() {
       const res = await fetch("http://localhost:5000/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp }),
+        body: JSON.stringify({email, otp}),
       });
 
       const text = await res.text();
@@ -138,17 +138,17 @@ export default function OtpVerify() {
             <input
               type="text"
               value={otp}
-              onChange={(e) => setOtp(e.target.value)}
+              onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))}
               maxLength={6}
-              required
-              className="w-full px-4 py-3 border rounded-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              placeholder="6-digit code from email"
+              className="w-full px-4 py-3 border rounded-lg border-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-center text-lg tracking-widest"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-3 text-white transition bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50"
+            className="w-full px-4 py-3 text-white transition bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50 font-semibold"
           >
             {loading ? "Verifying…" : "Verify OTP"}
           </button>

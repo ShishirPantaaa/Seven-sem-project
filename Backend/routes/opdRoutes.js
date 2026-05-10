@@ -10,6 +10,11 @@ const {
   updateDoctorAvailability,
   getQueueCount,
   getRecommendedDoctor,
+  getTokenStatus,
+  startConsultation,
+  handleAppointmentExpiry,
+  getWaitingTokensRealtime,
+  autoExpireAppointments,
 } = require('../controllers/opdController');
 
 // Book token (requires authentication)
@@ -20,6 +25,21 @@ router.get('/doctors/:doctorId/tokens/:date', getTokensByDoctor);
 
 // Update token status
 router.put('/tokens/:tokenId/status', updateTokenStatus);
+
+// Get real-time token status with queue position
+router.get('/tokens/:tokenId/status-realtime', getTokenStatus);
+
+// Start consultation for a token
+router.post('/tokens/:tokenId/start-consultation', startConsultation);
+
+// Handle appointment expiry and reschedule
+router.post('/tokens/:tokenId/expire', handleAppointmentExpiry);
+
+// Get all waiting tokens in real-time for a doctor
+router.get('/doctors/:doctorId/waiting-tokens/:date', getWaitingTokensRealtime);
+
+// Auto-expire old appointments
+router.post('/auto-expire-appointments', autoExpireAppointments);
 
 // Get doctors by department
 router.get('/departments/:departmentId/doctors', getDoctorsByDepartment);

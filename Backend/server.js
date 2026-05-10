@@ -4,6 +4,7 @@ const cors = require("cors");
 const db = require("./config/database");
 const logger = require("./utils/logger");
 const { errorHandler } = require("./middleware/errorHandler");
+const { startTokenScheduler } = require("./services/tokenScheduler");
 // Ensure database structure is ready when the server starts
 require("./initDb");
 const { authenticateToken } = require("./middleware/auth");
@@ -113,6 +114,9 @@ const PORT = 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  
+  // Start the token scheduler for real-time appointment management
+  startTokenScheduler(60); // Run checks every 60 seconds
 });
 
 

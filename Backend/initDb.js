@@ -101,6 +101,7 @@ const createTables = () => {
 
       ensureColumn('otp', 'ALTER TABLE users ADD COLUMN otp VARCHAR(6)');
       ensureColumn('otp_expiry', 'ALTER TABLE users ADD COLUMN otp_expiry DATETIME');
+      ensureColumn('verification_code', 'ALTER TABLE users ADD COLUMN verification_code VARCHAR(20) UNIQUE');
       ensureColumn('verified', 'ALTER TABLE users ADD COLUMN verified BOOLEAN DEFAULT FALSE');
       ensureColumn('password', 'ALTER TABLE users ADD COLUMN password VARCHAR(255)');
 
@@ -233,6 +234,9 @@ const createTables = () => {
       ensureTokenColumn('appointment_date', 'ALTER TABLE tokens ADD COLUMN appointment_date DATE');
       ensureTokenColumn('appointment_time', 'ALTER TABLE tokens ADD COLUMN appointment_time TIME');
       ensureTokenColumn('eta_time', 'ALTER TABLE tokens ADD COLUMN eta_time DATETIME');
+      ensureTokenColumn('consultation_start_time', 'ALTER TABLE tokens ADD COLUMN consultation_start_time DATETIME');
+      ensureTokenColumn('consultation_end_time', 'ALTER TABLE tokens ADD COLUMN consultation_end_time DATETIME');
+      ensureTokenColumn('is_expired', 'ALTER TABLE tokens ADD COLUMN is_expired BOOLEAN DEFAULT FALSE');
     }
   });
 
